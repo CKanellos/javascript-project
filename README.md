@@ -171,7 +171,7 @@ Items have the following properties
 - name (string - Use the rarity name + type. Example for type 'potion' and rarity 0 -> Common potion)
 - type (string - type of item)
 - value (number)
-- rarity (number - refer to the RARITY_LIST variable)
+- rarity (number - index of the corresponding rarity in RARITY_LIST, e.g. 0 is 'Common')
 - use (function - expects a target as parameter to specify on which target to use the item)
 
 3 types of objects to implement:  
