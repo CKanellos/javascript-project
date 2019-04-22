@@ -63,7 +63,25 @@ function useSkill(skillName, target) {}
 // First and last rows are walls
 // First and last columns are walls
 // All the other entities are grass entities
-function createBoard(rows, columns) {}
+function createBoard(rows, columns) {
+  for (let i = 0; i < rows; i++) {
+    board[i] = [];
+    for (let j = 0; j < columns; j++) {
+      if (i === 0 || j === 0 || i === rows - 1 || j === columns - 1) {
+        board[i][j] = {
+          type: 'wall',
+          position: { row: i, column: j }
+        }; 
+      }
+      else {
+        board[i][j] = {
+          type: 'grass',
+          position: { row: i, column: j }
+        };
+      }
+    }
+  }
+}
 
 // Updates the board by setting the entity at the entity position
 // An entity has a position property, each board cell is an object with an entity property holding a reference to the entity at that position
@@ -72,18 +90,66 @@ function updateBoard(entity) {}
 
 // Sets the position property of the player object to be in the middle of the board
 // You may need to use Math methods such as Math.floor()
-function placePlayer() {}
+function placePlayer() {
+  player.position = {
+    row: Math.floor(board.length / 2),
+    column: Math.floor(board[0].length / 2)
+  };
+}
 
 // Creates the board and places player
-function initBoard(rows, columns) {}
+function initBoard(rows, columns) {
+  print("Creating board and placing player...");
+  createBoard(rows, columns);
+  placePlayer();
+}
 
 // Prints the board
-function printBoard() {}
+function printBoard() {
+  for (let i = 0; i < board.length; i++) {
+    let rowString  = "";
+    for (let j = 0; j < board[i].length; j++) {
+      if (i === player.position.row && j === player.position.column) {
+        rowString += 'P';
+      }
+      else if (board[i][j].type === 'wall') {
+        rowString += "#";
+      }
+      else if (board[i][j].type === 'grass') {
+        rowString += ".";
+      }
+    }
+    print(rowString);
+  }
+}
 
 // Sets the player variable to a player object based on the specifications of the README file
 // The items property will need to be a new array of cloned item objects
 // Prints a message showing player name and level (which will be 1 by default)
-function createPlayer(name, level = 1, items = []) {}
+function createPlayer(name, level = 1, items = []) {
+  print("Create player with name " + name + " and level " + level);
+  player = {
+    name: name,
+    level: level,
+    items: [], /* TODO */
+    skills: [], /* TODO */
+    attack: level * 10,
+    speed: 3000 / level, /* Duration of interval, decreases with level ups */
+    hp: level * 100,
+    gold: 0,
+    exp: 0,
+    type: 'player',
+    getMaxHp: function() {
+      return this.level * 100;
+    },
+    levelUp: function() {
+      /* TODO */
+    },
+    getExpToLevel: function() {
+      /* TODO */
+    }
+  }; 
+}
 
 // Creates a monster object with a random name with the specified level, items and position
 // The items property will need to be a new array of cloned item objects
@@ -104,7 +170,40 @@ function createDungeon(position, isLocked = true, hasPrincess = true, items = []
 
 // Moves the player in the specified direction
 // You will need to handle encounters with other entities e.g. fight with monster
-function move(direction) {}
+function move(direction) {
+  let newPosition;
+  switch (direction) {
+    case 'U':
+      newPosition = {
+        row: player.position.row - 1 ,
+        column: player.position.column
+      };
+      break;
+    case 'R':
+      newPosition = {
+        row: player.position.row,
+        column: player.position.column + 1
+      };
+      break;
+    case 'D':
+      newPosition = {
+        row: player.position.row + 1 ,
+        column: player.position.column
+      };
+      break;
+    case 'L':
+      newPosition = {
+        row: player.position.row,
+        column: player.position.column - 1
+      };
+      break;
+  }
+  if (board[newPosition.row][newPosition.column].type !== 'wall') {
+    player.position = newPosition;
+    // TODO: handle encounters with monsters, etc.
+  }
+  printBoard();
+}
 
 function setupPlayer() {
   printSectionTitle('SETUP PLAYER');
@@ -138,6 +237,14 @@ function gameOver() {
 function next() {
   gameStep++;
   run();
+}
+
+/* HACK THE GAME  */
+function test() {
+  createPlayer('CK');
+  next();
+  initBoard(7, 15);
+  next();
 }
 
 function run() {
