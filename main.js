@@ -22,7 +22,38 @@ const monsterNames = [
 ];
 
 const RARITY_LIST = ['Common', 'Unusual', 'Rare', 'Epic'];
-const items = []; // Array of item objects. These will be used to clone new items with the appropriate properties.
+
+// Array of item objects. These will be used to clone new items with the appropriate properties.
+const items = [
+  {
+    name: 'Common potion',
+    type: 'potion',
+    value: 5,
+    rarity: 0,
+    use: function(target) {
+      // TODO restores 25hp to the specified target
+    }
+  },
+  {
+    name: 'Common bomb',
+    type: 'bomb',
+    value: 7,
+    rarity: 0,
+    use: function(target) {
+      // TODO deals 50hp damage to the specified target
+    }
+  },
+  {
+    name: 'Epic key',
+    type: 'key',
+    value: 150,
+    rarity: 3,
+    use: function(target) {
+      //TODO Unlocks the door to a dungeon
+    }
+  }
+]; 
+
 const GAME_STEPS = ['SETUP_PLAYER', 'SETUP_BOARD', 'GAME_START'];
 let gameStep = 0; // The current game step, value is index of the GAME_STEPS array.
 let board = []; // The board holds all the game entities. It is a 2D array.
@@ -36,17 +67,52 @@ function print(arg, color) {
 
 // Prints a blue string with the indicated number of dashes on each side of the string. Usage: printSectionTitle('hi', 1) // -hi-
 // We set a default value for the count to be 20 (i.e. 20 dashes '-')
-function printSectionTitle(title, count = 20) {}
+function printSectionTitle(title, count = 20) {
+  let dashes = '';
+  for (let i = 0; i < count; i++) {
+    dashes += '-';
+  }
+  print(dashes + title + dashes, 'blue');
+}
 
 // Returns a new object with the same keys and values as the input object
-function clone(entity) {}
+function clone(entity) {
+  let obj = {};
+  let keys = Object.keys(entity);
+  let values = Object.values(entity);
+  for (let i = 0; i < keys.length; i++) {
+    obj[keys[i]] = values[i];
+  }
+  return obj;
+}
 
 // returns true or false to indicate whether 2 different objects have the same keys and values
-function assertEqual(obj1, obj2) {}
+function assertEqual(obj1, obj2) {
+  let obj1keys = Object.keys(obj1);
+  let obj1values = Object.values(obj1);
+  let obj2keys = Object.keys(obj2);
+  let obj2values = Object.values(obj2);
+  if (obj1keys.length !== obj2keys.length) {
+    return false;
+  }
+  for (let i = 0; i < obj1keys.length; i++) {
+    if (obj1keys[i] !== obj2keys[i] || obj1values[i] !== obj2values[i]) {
+      return false;
+    }
+  }
+  return true;
+}
 
 // Clones an array of objects
 // returns a new array of cloned objects. Useful to clone an array of item objects
-function cloneArray(objs) {}
+function cloneArray(objs) {
+  let arr = [];
+  for (let i = 0; i < objs.length; i++) {
+    let cloneObj = clone(objs[i]); 
+    arr.push(cloneObj);
+  }
+  return arr;
+}
 
 // Uses a player item (note: this consumes the item, need to remove it after use)
 // itemName is a string, target is an entity (i.e. monster, tradesman, player, dungeon)
@@ -86,7 +152,9 @@ function createBoard(rows, columns) {
 // Updates the board by setting the entity at the entity position
 // An entity has a position property, each board cell is an object with an entity property holding a reference to the entity at that position
 // When a player is on a board cell, the board cell keeps the current entity property (e.g. monster entity at that position) and may need to have an additional property to know the player is there too.
-function updateBoard(entity) {}
+function updateBoard(entity) {
+  board[entity.position.row][entity.position.column] = entity;
+}
 
 // Sets the position property of the player object to be in the middle of the board
 // You may need to use Math methods such as Math.floor()
@@ -118,6 +186,18 @@ function printBoard() {
       else if (board[i][j].type === 'grass') {
         rowString += ".";
       }
+      else if (board[i][j].type === 'monster') {
+        rowString += 'M';
+      }
+      else if (board[i][j].type === 'tradesman') {
+        rowString += 'T';
+      }
+      else if (board[i][j].type === 'potion' || board[i][j].type === 'bomb' || board[i][j].type === 'key') {
+        rowString += 'I';
+      }
+      else if (board[i][j].type === 'dungeon') {
+        rowString += 'D';
+      }
     }
     print(rowString);
   }
@@ -131,10 +211,10 @@ function createPlayer(name, level = 1, items = []) {
   player = {
     name: name,
     level: level,
-    items: [], /* TODO */
+    items: cloneArray(items),
     skills: [], /* TODO */
     attack: level * 10,
-    speed: 3000 / level, /* Duration of interval, decreases with level ups */
+    speed: 3000 / level,
     hp: level * 100,
     gold: 0,
     exp: 0,
@@ -154,19 +234,80 @@ function createPlayer(name, level = 1, items = []) {
 // Creates a monster object with a random name with the specified level, items and position
 // The items property will need to be a new array of cloned item objects
 // The entity properties (e.g. hp, attack, speed) must respect the rules defined in the README
-function createMonster(level, items, position) {}
+function createMonster(level, items, position) {
+  print('Creating monster...');
+  let name = monsterNames[Math.floor(Math.random() * monsterNames.length)];
+  return {
+    name: name,
+    level: level, 
+    hp: level * 100,
+    attack: level * 10,
+    speed: 6000 / level,
+    items: cloneArray(items),
+    position: {
+      row: position.row,
+      column: position.column
+    },
+    type: 'monster',
+    getMaxHp: function () {
+      return this.level * 100;
+    },
+    getExp: function () {
+      return this.level * 10;
+    }
+  };
+}
 
 // Creates a tradesman object with the specified items and position. hp is Infinity
 // The items property will need to be a new array of cloned item objects
-function createTradesman(items, position) {}
+function createTradesman(items, position) {
+  print('Creating tradesman...'); 
+  return {
+    name: 'Mr. Trader',
+    hp: Infinity,
+    items: cloneArray(items),
+    position: {
+      row: position.row,
+      column: position.column
+    },
+    type: 'tradesman',
+    getMaxHp: function () {
+      return Infinity;
+    }
+  };
+} 
 
 // Creates an item entity by cloning one of the item objects and adding the position and type properties.
 // item is a reference to one of the items in the items variable. It needs to be cloned before being assigned the position and type properties.
-function createItem(item, position) {}
+function createItem(item, position) {
+  print('Creating item...');
+  let cloneItem = clone(item);
+  cloneItem.position = {
+    row: position.row,
+    column: position.column
+  };
+  return cloneItem;
+}
 
 // Creates a dungeon entity at the specified position
 // The other parameters are optional. You can have unlocked dungeons with no princess for loot, or just empty ones that use up a key for nothing.
-function createDungeon(position, isLocked = true, hasPrincess = true, items = [], gold = 0) {}
+function createDungeon(position, isLocked = true, hasPrincess = true, items = [], gold = 0) {
+  print('Creating dungeon...');
+  return {
+    isLocked: isLocked,
+    hasPrincess: hasPrincess,
+    items: cloneArray(items),
+    gold: gold,
+    position: {
+      row: position.row,
+      column: position.column
+    },
+    type: 'dungeon'
+  };
+  /*
+If a dungeon has no princess, player receives items and gold in that dungeon
+*/
+}
 
 // Moves the player in the specified direction
 // You will need to handle encounters with other entities e.g. fight with monster
@@ -200,7 +341,7 @@ function move(direction) {
   }
   if (board[newPosition.row][newPosition.column].type !== 'wall') {
     player.position = newPosition;
-    // TODO: handle encounters with monsters, etc.
+    /* TODO: handle encounters with monsters, etc. */
   }
   printBoard();
 }
@@ -239,11 +380,15 @@ function next() {
   run();
 }
 
-/* HACK THE GAME  */
+/* TESTING ENTITIES */
 function test() {
   createPlayer('CK');
   next();
   initBoard(7, 15);
+  updateBoard(createMonster(1, [items[1]], {row: 3, column: 6}));
+  updateBoard(createTradesman([items[0]], {row: 2, column: 5}));
+  updateBoard(createItem(items[0], {row: 4, column: 2}));
+  updateBoard(createDungeon({ row: 5, column: 8}));
   next();
 }
 
