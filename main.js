@@ -31,7 +31,12 @@ const items = [
     value: 5,
     rarity: 0,
     use: function(target) {
-      // TODO restores 25hp to the specified target
+      let potionHp = 25;
+      target.hp += potionHp;
+      if (target.hp > target.getMaxHp()) {
+        target.hp = target.getMaxHp();
+      }
+      print('Used potion! +' + potionHp + 'hp (Total HP: ' + target.hp + ')', 'green');
     }
   },
   {
@@ -40,7 +45,14 @@ const items = [
     value: 7,
     rarity: 0,
     use: function(target) {
-      // TODO deals 50hp damage to the specified target
+      let bigBang = 50;
+      target.hp -= bigBang;
+      if (target.hp < 0) {
+        target.hp = 0;
+      }
+      print('Used bomb!', 'orange');
+      print(target.name + ' Hit! -' + bigBang, 'purple');
+      print('HP left: ' + target.hp, 'purple');
     }
   },
   {
@@ -49,7 +61,9 @@ const items = [
     value: 150,
     rarity: 3,
     use: function(target) {
-      //TODO Unlocks the door to a dungeon
+      target.isLocked = false;
+      print('Unlocking dungeon...', 'red');
+      unlockedDungeon(target);
     }
   }
 ]; 
@@ -118,7 +132,27 @@ function cloneArray(objs) {
 // itemName is a string, target is an entity (i.e. monster, tradesman, player, dungeon)
 // If target is not specified, item should be used on player for type 'potion'. Else, item should be used on the entity at the same position
 // First item of matching type is used
-function useItem(itemName, target) {}
+function useItem(itemName, target) {
+  let i;
+  for (i = 0; i < player.items.length; i++) {
+    if (player.items[i].name === itemName) {
+      break; 
+    }
+  }
+  if (i < player.items.length) {
+    let item = player.items[i];
+    if (typeof(target) === 'undefined') {
+      if (item.type === 'potion') {
+        target = player;
+      }
+      else {
+        target = board[player.position.row][player.position.column];
+      }
+    }
+    item.use(target);
+    player.items.splice(i, 1);
+  }
+}
 
 // Uses a player skill (note: skill is not consumable, it's useable infinitely besides the cooldown wait time)
 // skillName is a string. target is an entity (typically monster).
@@ -223,10 +257,13 @@ function createPlayer(name, level = 1, items = []) {
       return this.level * 100;
     },
     levelUp: function() {
-      /* TODO */
+      this.exp -= this.getExpToLevel();
+      this.level++;
+      this.speed = 3000 / this.level;
+      this.attack = this.level * 10;
     },
     getExpToLevel: function() {
-      /* TODO */
+      return this.level * 20;
     }
   }; 
 }
@@ -304,9 +341,6 @@ function createDungeon(position, isLocked = true, hasPrincess = true, items = []
     },
     type: 'dungeon'
   };
-  /*
-If a dungeon has no princess, player receives items and gold in that dungeon
-*/
 }
 
 // Moves the player in the specified direction
@@ -341,9 +375,120 @@ function move(direction) {
   }
   if (board[newPosition.row][newPosition.column].type !== 'wall') {
     player.position = newPosition;
-    /* TODO: handle encounters with monsters, etc. */
+    let entity = board[player.position.row][player.position.column];
+    if (entity.type === 'monster') {
+      print('Encountered a ' + entity.name);
+      battleMonster(entity);
+    }
+    else if (entity.type === 'tradesman') {
+      print('Encountered ' + entity.name);
+      /* Trade with him ? */
+    }
+    else if (entity.type === 'potion' || entity.type === 'bomb' || entity.type === 'key') {
+      print('Found a ' + entity.name);
+      collectItem(entity);
+    }
+    else if (entity.type === 'dungeon') {
+      print('Found dungeon!');
+      if (entity.isLocked) {
+        lockedDungeon(entity);
+      }
+      else {
+        unlockedDungeon(entity);
+      }
+    }
   }
   printBoard();
+}
+
+function battleMonster(monster) {
+  let playerAttackIntervalId = setInterval(function() {
+    monster.hp -= player.attack;
+    if (monster.hp < 0) {
+      monster.hp = 0;
+    }
+    print(monster.name + ' Hit! -' + player.attack, 'purple');
+    print('HP left: ' + monster.hp, 'purple');
+    if (monster.hp === 0) {
+      print(monster.name + ' defeated.');
+      let monsterExp = monster.getExp();
+      player.exp += monsterExp;
+      print('Congratulations! You have received ' + monsterExp + ' exp points.');
+      if (player.exp >= player.getExpToLevel()) {
+        player.levelUp();
+      }
+      print('You received the following items:');
+      print(cloneArray(monster.items));
+      while (monster.items.length > 0) {
+        player.items.push(monster.items.shift());
+      }
+      updateBoard({
+        type: 'grass',
+        position: {
+          row: monster.position.row,
+          column: monster.position.column
+        }
+      });  
+      clearInterval(playerAttackIntervalId);
+      clearInterval(monsterAttackIntervalId);
+    }
+  }, player.speed);
+  let monsterAttackIntervalId = setInterval(function() {
+    player.hp -= monster.attack;
+    if (player.hp < 0) {
+      player.hp = 0;
+    }
+    print(player.name + ' Hit! -' + monster.attack, 'red');
+    print('HP left: ' + player.hp, 'red');
+    if (player.hp === 0) {
+      print(player.name + ' defeated.');
+      gameOver();
+      clearInterval(monsterAttackIntervalId);
+      clearInterval(playerAttackIntervalId);
+    }
+  }, monster.speed); 
+}
+
+function visitTradesman(tradesman) {
+  /* TODO */
+}
+
+function collectItem(item) {
+  player.items.push(item);
+  updateBoard({
+    type: 'grass',
+    position: {
+      row: item.position.row,
+      column: item.position.column
+    }
+  }); 
+  delete item.position;
+}
+
+function lockedDungeon(dungeon) {
+  print('You need a key to open it. If you have the key, you can unlock the door.');
+  print('Rumours are some monsters have keys to dungeons.');
+  print('The tradesman may have spare keys to sell, but they don\'t come cheap!');
+}
+
+function unlockedDungeon(dungeon) {
+  print('The dungeon is unlocked!');
+  if (dungeon.hasPrincess) {
+    print('You have freed the princess! Congratulations!');
+    print('The adveturer ' + player.name + ' and the princess lived hapilly ever after.');
+    gameOver();
+  }
+  else {
+    print('Unfortunately, there was no princess.');
+    print('As consolation, you found ' + dungeon.items.length + ' items and ' + dungeon.gold + ' gold.');
+    print(cloneArray(dungeon.items));
+    while (dungeon.items.length > 0) {
+      player.items.push(dungeon.items.shift());
+    }
+    player.gold += dungeon.gold;
+    dungeon.gold = 0;
+    print ('You now have ' + player.gold + ' gold');
+  }
 }
 
 function setupPlayer() {
@@ -382,13 +527,13 @@ function next() {
 
 /* TESTING ENTITIES */
 function test() {
-  createPlayer('CK');
+  createPlayer('CK', 1, [items[0]]);
   next();
   initBoard(7, 15);
   updateBoard(createMonster(1, [items[1]], {row: 3, column: 6}));
   updateBoard(createTradesman([items[0]], {row: 2, column: 5}));
   updateBoard(createItem(items[0], {row: 4, column: 2}));
-  updateBoard(createDungeon({ row: 5, column: 8}));
+  updateBoard(createDungeon({ row: 5, column: 8}, false, false, [items[2], items[0]] , 40));
   next();
 }
 
