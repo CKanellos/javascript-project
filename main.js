@@ -72,6 +72,8 @@ const GAME_STEPS = ['SETUP_PLAYER', 'SETUP_BOARD', 'GAME_START'];
 let gameStep = 0; // The current game step, value is index of the GAME_STEPS array.
 let board = []; // The board holds all the game entities. It is a 2D array.
 let player = {}; // The player object
+let playerAttackIntervalId = null;
+let monsterAttackIntervalId = null;
 
 // Utility function to print messages with different colors. Usage: print('hello', 'red');
 function print(arg, color) {
@@ -157,7 +159,35 @@ function useItem(itemName, target) {
 // Uses a player skill (note: skill is not consumable, it's useable infinitely besides the cooldown wait time)
 // skillName is a string. target is an entity (typically monster).
 // If target is not specified, skill shoud be used on the entity at the same position
-function useSkill(skillName, target) {}
+function useSkill(skillName, target) {
+  let i;
+  for (i = 0; i < player.skills.length; i++) {
+    if (player.skills[i].name === skillName) {
+      break;
+    }
+  }
+  if (i < player.skills.length) {
+    let skill = player.skills[i];
+    if (typeof(target) === 'undefined') {
+      target = board[player.position.row][player.position.column];
+    }
+    if (player.level < skill.requiredLevel) {
+      print('Your level is too low. Required level: ' + skill.requiredLevel);
+    }
+    else if (skill.cooldown > 0) {
+      print('Skill in cooldown. ' + skill.cooldown + 'ms remaining.')
+    }
+    else {
+      skill.use(target);
+      let intervalId = setInterval(function() {
+        skill.cooldown -= 100;
+        if (skill.cooldown === 0) {
+          clearInterval(intervalId);
+        }
+      }, 100);
+    }
+  }
+}
 
 // Sets the board variable to a 2D array of rows and columns
 // First and last rows are walls
@@ -246,7 +276,43 @@ function createPlayer(name, level = 1, items = []) {
     name: name,
     level: level,
     items: cloneArray(items),
-    skills: [], /* TODO */
+    skills: [
+      {
+        name: 'confuse',
+        requiredLevel: 1,
+        cooldown: 0,
+        use: function(target) {
+          this.cooldown = 10000;
+          print('Confusing ' + target.name + '...');
+          target.name = target.name.split('').reverse().join('');
+          let confusedDamage = player.level * 25;
+          target.hp -= confusedDamage;
+          if (target.hp < 0) {
+            target.hp = 0;
+          }
+          print(target.name + ', target is confused and hurting itself in the process.', 'red');
+          print(target.name + ' hit! -' + confusedDamage + 'hp', 'purple');
+          print('HP left: ' + target.hp, 'purple');
+        }
+      },
+      {
+        name: 'steal',
+        requiredLevel: 3,
+        cooldown: 0,
+        use: function(target) {
+          this.cooldown = 25000;
+          let stolenItems = target.items.filter(function(item) {
+            return item.rarity <= 1;
+          });
+          target.items = target.items.filter(function(item) {
+            return item.rarity > 1;
+          });
+          player.items = player.items.concat(stolenItems);
+          print('Successfully stole items:');
+          print(stolenItems);
+        }
+      }
+    ],
     attack: level * 10,
     speed: 3000 / level,
     hp: level * 100,
@@ -375,6 +441,7 @@ function move(direction) {
   }
   if (board[newPosition.row][newPosition.column].type !== 'wall') {
     player.position = newPosition;
+    clearAttackIntervals();
     let entity = board[player.position.row][player.position.column];
     if (entity.type === 'monster') {
       print('Encountered a ' + entity.name);
@@ -382,7 +449,7 @@ function move(direction) {
     }
     else if (entity.type === 'tradesman') {
       print('Encountered ' + entity.name);
-      /* Trade with him ? */
+      visitTradesman(entity);
     }
     else if (entity.type === 'potion' || entity.type === 'bomb' || entity.type === 'key') {
       print('Found a ' + entity.name);
@@ -402,7 +469,7 @@ function move(direction) {
 }
 
 function battleMonster(monster) {
-  let playerAttackIntervalId = setInterval(function() {
+  playerAttackIntervalId = setInterval(function() {
     monster.hp -= player.attack;
     if (monster.hp < 0) {
       monster.hp = 0;
@@ -429,11 +496,10 @@ function battleMonster(monster) {
           column: monster.position.column
         }
       });  
-      clearInterval(playerAttackIntervalId);
-      clearInterval(monsterAttackIntervalId);
+      clearAttackIntervals();
     }
   }, player.speed);
-  let monsterAttackIntervalId = setInterval(function() {
+  monsterAttackIntervalId = setInterval(function() {
     player.hp -= monster.attack;
     if (player.hp < 0) {
       player.hp = 0;
@@ -443,14 +509,54 @@ function battleMonster(monster) {
     if (player.hp === 0) {
       print(player.name + ' defeated.');
       gameOver();
-      clearInterval(monsterAttackIntervalId);
-      clearInterval(playerAttackIntervalId);
+      clearAttackIntervals();
     }
   }, monster.speed); 
 }
 
+function clearAttackIntervals() {
+  if (playerAttackIntervalId !== null) {
+    clearInterval(playerAttackIntervalId);
+    playerAttackIntervalId = null;
+  }
+  if (monsterAttackIntervalId !== null) {
+    clearInterval(monsterAttackIntervalId);
+    monsterAttackIntervalId = null;
+  }
+}
+
 function visitTradesman(tradesman) {
-  /* TODO */
+  print('Items for sale:');
+  print(tradesman.items);
+}
+
+function buy(itemIdx) {
+  let entity = board[player.position.row][player.position.column];
+  if (entity.type === 'tradesman' && typeof(entity.items[itemIdx]) !== 'undefined') {
+    let item = entity.items[itemIdx];
+    if (player.gold < item.value) {
+      print('Not enough gold (Required: ' + item.value + ', Gold: ' + player.gold + ')');
+    }
+    else {
+      entity.items.splice(itemIdx,1);
+      player.items.push(item);
+      player.gold -= item.value;
+      print('Purchased ' + item.name);
+      print('Gold: ' + player.gold);
+    }
+  }
+}
+
+function sell(itemIdx) {
+  let entity = board[player.position.row][player.position.column];
+  if (entity.type === 'tradesman' && typeof(player.items[itemIdx]) !== 'undefined') {
+    let item = player.items[itemIdx];
+    player.items.splice(itemIdx,1);
+    entity.items.push(item);
+    player.gold += item.value;
+    print('Sold ' + item.name);
+    print('Gold: ' + player.gold);
+  }
 }
 
 function collectItem(item) {
